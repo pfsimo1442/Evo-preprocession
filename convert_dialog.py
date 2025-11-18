@@ -3,49 +3,41 @@ import json
 
 SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<BOS>", "<EOS>", "<User>", "<Assistant>", "<SEP>"]
 
+def isOdd(num):
+    return True if num % 2 == 1 else False
+
 def process_txt_file(path):
-    """
-    txt 파일 처리: index 기반 연속 대화 추출
-    """
     dialogs = []
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.read().splitlines()
-
     current_dialog = []
-    prev_index = None
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            index, text = line.strip().split("\t", 1)
-        except:
-            text = line.strip()
-            index = prev_index
-        if prev_index is None:
-            prev_index = index
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                index_str, text = line.strip().split("\t", 1)
+                index = int(index_str)
+            except:
+                continue
 
-        if index != prev_index:
-            if current_dialog:
-                dialogs.append(current_dialog)
-            current_dialog = []
-            prev_index = index
+            role = "user" if isOdd(index) else "assistant"
+            current_dialog.append({"role": role, "text": text})
 
-        current_dialog.append(text)
+            # 새로운 대화 단위 구분: index가 1로 다시 시작하면 새로운 dialog
+            if index == 1 and current_dialog[:-1]:
+                dialogs.append(current_dialog[:-1])
+                current_dialog = [current_dialog[-1]]
+
     if current_dialog:
         dialogs.append(current_dialog)
 
     return dialogs
 
 def process_json_file(path):
-    """
-    JSON / JSONL 파일 처리: index 기반 연속 대화 추출
-    """
     dialogs = []
     with open(path, "r", encoding="utf-8") as f:
         try:
             data = json.load(f)
         except:
-            # JSONL 형식일 경우
             data = [json.loads(line) for line in f]
 
     grouped = {}
@@ -71,32 +63,27 @@ def convert_all(file_list, tokenizer_file, train_file):
     tokenizer_lines = []
     train_data = []
 
-    # 맨 앞 special token 삽입
+    # special token
     tokenizer_lines.extend(SPECIAL_TOKENS)
-    tokenizer_lines.append("")  # 구분용 빈 줄
+    tokenizer_lines.append("")
 
     for path in file_list:
         if path.endswith(".txt"):
             dialogs = process_txt_file(path)
-            for dialog in dialogs:
-                # tokenizer_data.txt
-                for turn in dialog:
-                    tokenizer_lines.append(f"<BOS> {turn} <EOS>")
-                tokenizer_lines.append("")  # dialog 구분
-                # train_data.jsonl
-                train_data.append({"turns": [{"role": "user" if i % 2 == 0 else "assistant", "text": t} 
-                                             for i, t in enumerate(dialog)]})
         elif path.endswith(".json"):
             dialogs = process_json_file(path)
-            for dialog in dialogs:
-                # tokenizer_data.txt
-                for turn in dialog:
-                    tokenizer_lines.append(f"<BOS> {turn['text']} <EOS>")
-                tokenizer_lines.append("")  # dialog 구분
-                # train_data.jsonl
-                train_data.append({"turns": dialog})
+        else:
+            continue
 
-    # 파일 저장
+        for dialog in dialogs:
+            # tokenizer_data.txt
+            for turn in dialog:
+                tokenizer_lines.append(f"<BOS> {turn['text']} <EOS>")
+            tokenizer_lines.append("")  # dialog 구분
+
+            # train_data.jsonl
+            train_data.append({"turns": dialog})
+
     with open(tokenizer_file, "w", encoding="utf-8") as f:
         f.write("\n".join(tokenizer_lines))
     print(f"tokenizer_data.txt saved to {tokenizer_file}")
