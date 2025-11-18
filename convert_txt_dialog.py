@@ -1,44 +1,47 @@
-import json
+import os
 
-def convert_txt(file_path, tokenizer_output, train_output):
-    dialogs = []
-    current_dialog = []
-    last_idx = None
+def convert_txt_to_tokenizer(input_dir, output_file):
+    """
+    숫자 기반 연속 대화 txt 파일들을 tokenizer_data.txt 형식으로 변환
+    """
+    all_lines = []
+    for fname in os.listdir(input_dir):
+        if not fname.endswith(".txt"):
+            continue
+        path = os.path.join(input_dir, fname)
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+        current_dialog = []
+        prev_index = None
+        for line in lines:
+            if not line.strip():
                 continue
+            # 숫자\t텍스트 형태
+            try:
+                index, text = line.strip().split("\t", 1)
+            except:
+                text = line.strip()
+                index = prev_index
+            if prev_index is None:
+                prev_index = index
 
-            idx, text = line.split("\t", 1)
-            idx = int(idx)
-
-            if last_idx is not None and idx < last_idx:
-                dialogs.append(current_dialog)
+            if index != prev_index:
+                # 이전 dialog flush
+                for turn in current_dialog:
+                    all_lines.append(f"<BOS> {turn} <EOS>")
+                all_lines.append("")  # 대화 구분
                 current_dialog = []
+                prev_index = index
 
             current_dialog.append(text)
-            last_idx = idx
 
-    if current_dialog:
-        dialogs.append(current_dialog)
+        # 마지막 대화 flush
+        for turn in current_dialog:
+            all_lines.append(f"<BOS> {turn} <EOS>")
+        all_lines.append("")
 
-    # tokenizer data
-    with open(tokenizer_output, "w", encoding="utf-8") as f:
-        for dialog in dialogs:
-            for utt in dialog:
-                f.write(utt + "\n")
-
-    # jsonl data
-    with open(train_output, "w", encoding="utf-8") as f:
-        for dialog in dialogs:
-            turns = []
-            for i, t in enumerate(dialog):
-                role = "user" if i % 2 == 0 else "assistant"
-                turns.append({"role": role, "text": t})
-
-            json.dump({"turns": turns}, f, ensure_ascii=False)
-            f.write("\n")
-
-    print("TXT 변환 완료!")
+    # 파일 저장
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(all_lines))
+    print(f"tokenizer_data.txt saved to {output_file}")

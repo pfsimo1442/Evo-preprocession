@@ -1,37 +1,45 @@
+import os
 import json
-from collections import defaultdict
 
-def convert_json_dialog(json_file, tokenizer_output, train_output):
-    with open(json_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
+def convert_json_to_train_data(input_dir, output_file):
+    """
+    JSON 대화 데이터를 train_data.jsonl 형식으로 변환
+    """
+    output_data = []
+    for fname in os.listdir(input_dir):
+        if not fname.endswith(".txt") and not fname.endswith(".json"):
+            continue
+        path = os.path.join(input_dir, fname)
+        with open(path, "r", encoding="utf-8") as f:
+            try:
+                data = json.load(f)
+            except:
+                # JSONL 파일일 경우
+                data = [json.loads(line) for line in f]
 
-    dialogs = defaultdict(list)
+        # index별로 묶기
+        dialogs = {}
+        for item in data:
+            idx = item.get("index", 0)
+            if idx not in dialogs:
+                dialogs[idx] = []
+            user_text = item.get("user_utterance", "").strip()
+            system_text = item.get("system_utterance", "").strip()
 
-    for item in data:
-        idx = item["index"]
-        u = item["user_utterance"]
-        s = item["system_utterance"]
+            if user_text.lower() != "null" and user_text != "":
+                dialogs[idx].append({"role": "user", "text": user_text})
+            if system_text.lower() != "null" and system_text != "":
+                dialogs[idx].append({"role": "assistant", "text": system_text})
 
-        if s and s.lower() != "null":
-            dialogs[idx].append(("assistant", s))
+        # dialogs flatten
+        for turns in dialogs.values():
+            if not turns:
+                continue
+            output_data.append({"turns": turns})
 
-        if u and u.lower() != "null":
-            dialogs[idx].append(("user", u))
+    # 파일 저장 (JSONL)
+    with open(output_file, "w", encoding="utf-8") as f:
+        for dialog in output_data:
+            f.write(json.dumps(dialog, ensure_ascii=False) + "\n")
 
-    # tokenizer text
-    with open(tokenizer_output, "w", encoding="utf-8") as f:
-        for idx in sorted(dialogs.keys()):
-            for role, text in dialogs[idx]:
-                f.write(text + "\n")
-
-    # jsonl data
-    with open(train_output, "w", encoding="utf-8") as f:
-        for idx in sorted(dialogs.keys()):
-            turns = []
-            for role, text in dialogs[idx]:
-                turns.append({"role": role, "text": text})
-
-            json.dump({"turns": turns}, f, ensure_ascii=False)
-            f.write("\n")
-
-    print("JSON 대화 변환 완료!")
+    print(f"train_data.jsonl saved to {output_file}")
