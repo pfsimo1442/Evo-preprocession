@@ -211,3 +211,6 @@ input/
 output/
 raw/
 readme_json.txt
+.html
+.lnk
+.url
