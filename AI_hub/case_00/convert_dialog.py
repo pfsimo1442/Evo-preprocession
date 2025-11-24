@@ -55,6 +55,7 @@ def process_json_file(path):
             grouped[idx].append({"role": "assistant", "text": system_text})
 
     for turns in grouped.values():
+        
         dialogs.append(turns)
 
     return dialogs
