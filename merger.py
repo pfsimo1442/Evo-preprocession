@@ -1,5 +1,6 @@
 import os
 import json
+from tqdm import tqdm
 
 TOKENIZER_DIR = "merged/tokenizer"
 TRAIN_DIR = "merged/train"
@@ -29,11 +30,13 @@ def merge_tokenizer_files():
 
         # 각 파일의 special token(<BOS>, <EOS>) 헤더 제거
         cleaned = []
-        for line in lines:
+        pbar = tqdm(lines)
+        for line in pbar:
             striped = line.strip()
             if striped in SPECIAL_TOKENS:
                 continue
             cleaned.append(line)
+            pbar.set_description("processing %s now..." % fname)
 
         # 파일별로 그대로 이어붙임
         merged_lines.extend(cleaned)
@@ -54,10 +57,12 @@ def merge_train_files():
 
             path = os.path.join(TRAIN_DIR, fname)
             with open(path, "r", encoding="utf-8") as infile:
-                for line in infile:
+                pbar = tqdm(infile)
+                for line in pbar:
                     line = line.strip()
                     if line:
                         outfile.write(line + "\n")
+                    pbar.set_description("processing %s now..." % fname)
 
 
 def main():
